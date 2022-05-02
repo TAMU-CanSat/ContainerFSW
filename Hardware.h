@@ -16,19 +16,18 @@ namespace Hardware
   extern Adafruit_MPU6050 mpu;
   extern Adafruit_GPS GPS;
 
-  extern ArduinoQueue<Downlink> payload_packets;
-  extern ArduinoQueue<Downlink> ground_packets;
+  extern ArduinoQueue<String> payload_packets;
+  extern ArduinoQueue<String> ground_packets;
   extern Threads::Mutex mtx;
 
-  bool ready();
   void init();
-  void read_gps(GPS_Data &data);
-  void read_sensors(Sensor_Data &data);
+  void read_gps(Common::GPS_Data &data);
+  void read_sensors(Common::Sensor_Data &data);
 
-  void write_payload_radio(Downlink data);
+  void write_payload_radio(const String &data);
   bool read_payload_radio(String &data);
   
-  void write_ground_radio(Downlink data);
+  void write_ground_radio(const String &data);
   bool read_ground_radio(String &data);
 
   void payload_radio_loop();

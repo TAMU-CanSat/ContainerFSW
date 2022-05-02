@@ -5,36 +5,73 @@
 #include <Arduino.h>
 #include <TeensyThreads.h>
 #include <ArduinoQueue.h>
-#define GROUND_XBEE_SERIAL Serial1
-#define PAYLOAD_XBEE_SERIAL Serial2
+#include <TimeLib.h>
 
-const unsigned long TELEMETRY_DELAY = 500;
-const byte VOLTAGE_PIN = 14;
-const byte GPS_FIX_PIN = 12;
-const float SEA_LEVEL = 1014.6f;
+#define GROUND_XBEE_SERIAL Serial7
+#define PAYLOAD_XBEE_SERIAL Serial8
 
-struct GPS_Data // 13 bytes
-{
-  float latitude; // 4 bytes
-  float longitude; // 4 bytes
-  float altitude; // 4 bytes
-  byte sats; // 1 byte
-};
+namespace Common {
+  const unsigned long TELEMETRY_DELAY = 500;
+  const byte VOLTAGE_PIN = 23;
+  const byte BMP_SCL = 24;
+  const byte BMP_SDA = 25;
+  const float SEA_LEVEL = 1014.6f;
 
-struct Sensor_Data // 36 bytes
-{
-  float vbat; // 4 bytes
-  float altitude; // 4 bytes
-  float temperature; // 4 bytes
-  float gyro[3]; // 12 bytes
-  float acceleration[3]; // 12 bytes
-};
+   
+  static bool SIM_ACTIVATE = false;
+  static bool SIM_ENABLE = false;
+  static int SIM_PRESSURE = 0;
+  const static uint16_t TEAM_ID = 1051;
+  const static uint16_t LEAP_SECONDS = 18;
+  
+  static uint16_t BA_ADDR = 0;
+  static uint16_t PC_ADDR = 4;
+  static uint16_t ST_ADDR = 6;
+  
+  static float EE_BASE_ALTITUDE = 0;
+  static uint16_t EE_PACKET_COUNT = 0;
 
-struct Downlink // 54 bytes
-{
-  unsigned long milliseconds; //4 bytes
-  bool gps_fix; //1 byte 
-  GPS_Data gps_data; // 13 bytes 
-  Sensor_Data sensor_data; // 36 bytes
-};
+  static String lastCMD = "None";
+  
+  struct GPS_Data
+  {
+    uint16_t hours;
+    uint16_t minutes;
+    uint16_t seconds;
+    uint16_t milliseconds;
+    float latitude;
+    float longitude;
+    float altitude;
+    byte sats;
+  };
+  
+  struct Sensor_Data
+  {
+    float vbat;
+    float altitude;
+    float temperature;
+  };
+  
+  static void build_packet(String& packet, const String& state, const char tp_released, const GPS_Data &gps, const Sensor_Data &sensors)
+  {
+    packet = TEAM_ID + ","; //0
+    packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(elapsedMillis()) + ",";
+    packet += String(EE_PACKET_COUNT) + ",";
+    if (SIM_ACTIVATE && SIM_ENABLE)
+      packet += "S,";
+    else
+      packet += "F,";
+    packet += tp_released + ",";
+    packet += String(sensors.altitude) + ","; 
+    packet += String(sensors.temperature) + ",";
+    packet += String(sensors.vbat) + ",";
+    packet += String(gps.hours) + ":" + String(gps.minutes) + ":" + String(gps.seconds) + "." + String(gps.milliseconds) + ",";
+    packet += String(gps.latitude) + ","; 
+    packet += String(gps.longitude) + ","; 
+    packet += String(gps.altitude) + ",";  
+    packet += String(gps.sats) + ",";
+    packet += state + ",";
+    packet += lastCMD + "\n";
+  }
+}
 #endif

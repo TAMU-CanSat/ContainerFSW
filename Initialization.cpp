@@ -6,25 +6,22 @@ namespace States
 {  
   void Initialization()
   {
-    if (!Hardware::ready())
-    {
-      delay(500);
-      return;
-    }
-    
     unsigned long start = millis();
-  
-    Downlink packet;
-    packet.milliseconds = start;
-    Hardware::read_gps(packet.gps_data);
-    Hardware::read_sensors(packet.sensor_data);
+
+    Common::GPS_Data gps_data;
+    Common::Sensor_Data sensor_data;
+    Hardware::read_gps(gps_data);
+    Hardware::read_sensors(sensor_data);
+
+    String packet;
+    Common::build_packet(packet, "INITIALIZATION", 'N', gps_data, sensor_data);
   
     Hardware::mtx.lock();
     Hardware::ground_packets.enqueue(packet);
-    Hardware::payload_packets.enqueue(packet);
+    Hardware::payload_packets.enqueue("0");
     Hardware::mtx.unlock();
   
-    if (TELEMETRY_DELAY > (millis() - start))
-      delay(TELEMETRY_DELAY - (millis() - start));
+    if (Common::TELEMETRY_DELAY > (millis() - start))
+      delay(Common::TELEMETRY_DELAY - (millis() - start));
     }
 }

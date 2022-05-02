@@ -2,10 +2,9 @@
 #ifndef __STATES_H__
 #define __STATES_H__
 
-#include <Arduino.h>
 namespace States
 {
-  static int state = 0;
+  static uint16_t EE_STATE = 0;
   
   void Initialization();
   void Standby();
