@@ -7,16 +7,22 @@
 #include <ArduinoQueue.h>
 #include <TimeLib.h>
 
+#define GPS_SERIAL Serial1
 #define GROUND_XBEE_SERIAL Serial7
 #define PAYLOAD_XBEE_SERIAL Serial8
 
 namespace Common {
-  const unsigned long TELEMETRY_DELAY = 500;
+  static elapsedMillis milli;
+  const unsigned long TELEMETRY_DELAY = 1000; //1hz
+  
   const byte VOLTAGE_PIN = 23;
   const byte BMP_SCL = 24;
   const byte BMP_SDA = 25;
+  const byte PARA_SERVO_PIN = 41;
+  const byte CAMERA_PIN = 3;
+  const byte AUDIO_BEACON_PIN = 2;
+  
   const float SEA_LEVEL = 1014.6f;
-
    
   static bool SIM_ACTIVATE = false;
   static bool SIM_ENABLE = false;
@@ -51,11 +57,17 @@ namespace Common {
     float altitude;
     float temperature;
   };
+
+  static int millisecond()
+  {
+    if (milli >= 1000) milli -= 1000;
+    return milli;
+  }
   
   static void build_packet(String& packet, const String& state, const char tp_released, const GPS_Data &gps, const Sensor_Data &sensors)
   {
     packet = TEAM_ID + ","; //0
-    packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(elapsedMillis()) + ",";
+    packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
     packet += String(EE_PACKET_COUNT) + ",";
     if (SIM_ACTIVATE && SIM_ENABLE)
       packet += "S,";

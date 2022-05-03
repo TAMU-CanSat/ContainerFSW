@@ -5,22 +5,36 @@
 #include "Common.h"
 #include <Arduino.h>
 #include <Adafruit_BMP3XX.h>
-#include <Adafruit_MPU6050.h>
 #include <Adafruit_GPS.h>
 #include <TeensyThreads.h>
 #include <ArduinoQueue.h>
+#include <Servo.h>
 
 namespace Hardware
 {
   extern Adafruit_BMP3XX bmp;
-  extern Adafruit_MPU6050 mpu;
   extern Adafruit_GPS GPS;
+  extern Servo para_servo;
 
   extern ArduinoQueue<String> payload_packets;
   extern ArduinoQueue<String> ground_packets;
   extern Threads::Mutex mtx;
 
+  static elapsedMillis cameraHold;
+  static bool cameraRecording;
+  static bool firstCameraCall;
+
   void init();
+
+  void deploy_chute();
+  
+  void buzzer_on();
+  void buzzer_off();
+
+  void update_camera(bool record);
+  void start_recording();
+  void stop_recording();
+  
   void read_gps(Common::GPS_Data &data);
   void read_sensors(Common::Sensor_Data &data);
 

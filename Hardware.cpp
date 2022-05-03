@@ -4,17 +4,18 @@
 
 #include <Wire.h>
 #include <Adafruit_BMP3XX.h>
-#include <Adafruit_MPU6050.h>
 #include <Adafruit_GPS.h>
 #include <TeensyThreads.h>
 #include <ArduinoQueue.h>
 #include <EEPROM.h>
 #include <TimeLib.h>
+#include <Servo.h>
 
 namespace Hardware
 {   
   Adafruit_BMP3XX bmp;
-  Adafruit_GPS GPS(&Serial1);
+  Adafruit_GPS GPS(&GPS_SERIAL);
+  Servo para_servo;
 
   ArduinoQueue<String> payload_packets(20);
   ArduinoQueue<String> ground_packets(20);
@@ -22,11 +23,82 @@ namespace Hardware
   
   void init()
   {
+    cameraHold = 0;
+    cameraRecording = false;
+    firstCameraCall = true;
+    
+    para_servo.attach(Common::PARA_SERVO_PIN);
     Wire.setSCL(Common::BMP_SCL);
     Wire.setSDA(Common::BMP_SDA);
     Wire.begin();
     bmp.begin_I2C();
     GPS.begin(9600);
+  }
+
+  void buzzer_on()
+  {
+    analogWriteFrequency(Common::AUDIO_BEACON_PIN, 4000);
+    analogWrite(Common::AUDIO_BEACON_PIN, 128);
+  }
+
+  void buzzer_off()
+  {
+    analogWriteFrequency(Common::AUDIO_BEACON_PIN, 0);
+    analogWrite(Common::AUDIO_BEACON_PIN, 0);
+  }
+
+  void deploy_chute()
+  {
+    para_servo.write(30);
+  }
+
+  void update_camera(bool record)
+  {
+    if (record && !cameraRecording)
+    {
+      if (firstCameraCall)
+      { 
+        cameraHold = 0;
+        firstCameraCall = false;
+      }
+      
+      start_recording();
+    } else if (!record && cameraRecording)
+    {
+      if (firstCameraCall)
+      {
+        cameraHold = 0;
+        firstCameraCall = false;
+      }
+      
+      stop_recording();
+    }
+  }
+
+  void start_recording()
+  {
+    if (cameraHold < 150)
+    {
+      digitalWrite(Common::CAMERA_PIN, 1);
+    } else
+    {
+      digitalWrite(Common::CAMERA_PIN, 0);
+      cameraRecording = true;
+      firstCameraCall = true;
+    }
+  }
+
+  void stop_recording()
+  {
+    if (cameraHold < 550)
+    {
+      digitalWrite(Common::CAMERA_PIN, 1);
+    } else
+    {
+      digitalWrite(Common::CAMERA_PIN, 0);
+      cameraRecording = true;
+      firstCameraCall = true;
+    }
   }
 
   void read_gps(Common::GPS_Data &data)
@@ -45,6 +117,7 @@ namespace Hardware
     data.minutes = GPS.minute;
     data.seconds = GPS.seconds + Common::LEAP_SECONDS;
     data.milliseconds = GPS.milliseconds;
+    Common::milli = GPS.milliseconds;
     data.latitude = GPS.latitude;
     data.longitude = GPS.longitude;
     data.altitude = GPS.altitude;
