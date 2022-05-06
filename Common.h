@@ -8,21 +8,21 @@
 #include <TimeLib.h>
 
 #define GPS_SERIAL Serial1
-#define GROUND_XBEE_SERIAL Serial7
-#define PAYLOAD_XBEE_SERIAL Serial8
+#define GROUND_XBEE_SERIAL Serial5
+#define PAYLOAD_XBEE_SERIAL Serial4
 
 namespace Common {
-  static elapsedMillis milli;
+  static elapsedMillis milli = 0;
   const unsigned long TELEMETRY_DELAY = 1000; //1hz
   
-  const byte VOLTAGE_PIN = 23;
+  const byte VOLTAGE_PIN = 38;
   const byte BMP_SCL = 24;
   const byte BMP_SDA = 25;
   const byte PARA_SERVO_PIN = 41;
-  const byte CAMERA_PIN = 3;
-  const byte AUDIO_BEACON_PIN = 2;
+  const byte CAMERA_PIN = 36;
+  const byte AUDIO_BEACON_PIN = 37;
   
-  const float SEA_LEVEL = 1014.6f;
+  const float SEA_LEVEL = 1014.6f; //update this before launch
    
   static bool SIM_ACTIVATE = false;
   static bool SIM_ENABLE = false;
@@ -41,9 +41,9 @@ namespace Common {
   
   struct GPS_Data
   {
-    uint16_t hours;
-    uint16_t minutes;
-    uint16_t seconds;
+    uint8_t hours;
+    uint8_t minutes;
+    uint8_t seconds;
     uint16_t milliseconds;
     float latitude;
     float longitude;
@@ -64,9 +64,9 @@ namespace Common {
     return milli;
   }
   
-  static void build_packet(String& packet, const String& state, const char tp_released, const GPS_Data &gps, const Sensor_Data &sensors)
+  static void build_packet(String& packet, const String& state, const String& tp_released, const GPS_Data &gps, const Sensor_Data &sensors)
   {
-    packet = TEAM_ID + ","; //0
+    packet = String(TEAM_ID) + ","; //0
     packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
     packet += String(EE_PACKET_COUNT) + ",";
     if (SIM_ACTIVATE && SIM_ENABLE)
@@ -83,7 +83,7 @@ namespace Common {
     packet += String(gps.altitude) + ",";  
     packet += String(gps.sats) + ",";
     packet += state + ",";
-    packet += lastCMD + "\n";
+    packet += lastCMD;
   }
 }
 #endif

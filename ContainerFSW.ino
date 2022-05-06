@@ -6,6 +6,7 @@
 
 void setup() {
   Hardware::init();
+  Serial.begin(115200);
   GROUND_XBEE_SERIAL.begin(115200); //xbees must be preconfigured for this
   PAYLOAD_XBEE_SERIAL.begin(115200); //default baud is 9600
   
@@ -25,10 +26,6 @@ void loop() {
   switch (States::EE_STATE)
   {
     case 0:
-      //reset recovery params
-      EEPROM.put(Common::BA_ADDR, 0.0f);
-      EEPROM.put(Common::PC_ADDR, 0);
-      EEPROM.put(Common::ST_ADDR, 0);
       States::Initialization();
       break;
     case 1:
