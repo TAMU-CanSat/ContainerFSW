@@ -46,7 +46,7 @@ namespace States
     Common::altitudes.push_back(gps_data.altitude);
 
     // Now we'll actually switch the state
-    if (Common::acceleration >= 18 or Common::altitudes[-1] >= 10)
+    if (Common::acceleration >= 18 || Common::altitudes[altitude_length - 1] >= 10)
     {
       States::EE_STATE = 2;
       EEPROM.put(Common::ST_ADDR, 2);
