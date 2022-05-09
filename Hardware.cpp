@@ -12,7 +12,19 @@
 #include <Servo.h>
 
 namespace Hardware
-{   
+{  
+  bool SIM_ACTIVATE = false;
+  bool SIM_ENABLE = false;
+  int SIM_PRESSURE = 0;
+  float EE_BASE_ALTITUDE = 0;
+  uint16_t EE_PACKET_COUNT = 0;
+  int lastCheck = 4;
+  String lastCMD = "None";
+  elapsedMillis cameraHold = 0;
+  bool cameraRecording = false;
+  bool firstCameraCall = true;
+    
+  
   Adafruit_BMP3XX bmp;
   Adafruit_GPS GPS(&GPS_SERIAL);
   Servo para_servo;
@@ -101,28 +113,34 @@ namespace Hardware
 
   void read_gps(Common::GPS_Data &data)
   {
-    // Loop until we have a full NMEA sentence and it parses successfully
-    do {
+    bool newData = false;
+    for (int i = 0; i < 175; i++)
+    {
       GPS.read();
-      while (!GPS.newNMEAreceived()) {
-        GPS.read();
+      if (GPS.newNMEAreceived())
+      {
+          if (GPS.parse(GPS.lastNMEA()))
+          {
+            newData = true;
+            break;
+          }
       }
-    } while (!GPS.parse(GPS.lastNMEA()));
-
-    mtx.lock();
-    setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
-    adjustTime(Common::LEAP_SECONDS);
+    }
+          
+    if (newData)
+    {
+      setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
+      lastCheck = GPS.milliseconds + millis();
+    }
 
     data.hours = GPS.hour;
     data.minutes = GPS.minute;
     data.seconds = GPS.seconds;
     data.milliseconds = GPS.milliseconds;
-    Common::milli = GPS.milliseconds;
     data.latitude = GPS.latitude;
     data.longitude = GPS.longitude;
     data.altitude = GPS.altitude;
     data.sats = (byte)(unsigned int)GPS.satellites;  // We do this double conversion to avoid signing issues
-    mtx.unlock();
   }
 
   bool read_ground_radio(String &data)
@@ -161,8 +179,8 @@ namespace Hardware
       while (!payload_packets.isEmpty())
       {
         PAYLOAD_XBEE_SERIAL.println(payload_packets.dequeue());
-        Common::EE_PACKET_COUNT += 1;
-        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
+        EE_PACKET_COUNT += 1;
+        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -170,15 +188,15 @@ namespace Hardware
       while (read_payload_radio(received))
       {
         String header = String(Common::TEAM_ID + 5000) + ",";
-        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(Common::milli) + ",";
-        header += String(Common::EE_PACKET_COUNT) + ",";
+        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
+        header += String(EE_PACKET_COUNT) + ",";
         header += "T,";
 
         mtx.lock();
         ground_packets.enqueue(header + received);
         mtx.unlock();
       }
-      delay(250);
+      threads.delay(250);
     }
   }
   
@@ -190,8 +208,8 @@ namespace Hardware
       while (!ground_packets.isEmpty())
       {
         GROUND_XBEE_SERIAL.println(ground_packets.dequeue());
-        Common::EE_PACKET_COUNT += 1;
-        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
+        EE_PACKET_COUNT += 1;
+        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -205,7 +223,7 @@ namespace Hardware
           String cmd = data.substring(0, comma);
           String params = data.substring(data.indexOf(','));
 
-          Common::lastCMD = cmd;
+          lastCMD = cmd;
 
           if (cmd.equals("CX"))
           {
@@ -228,22 +246,22 @@ namespace Hardware
           {
             if (params.equals("ENABLE"))
             {
-              Common::SIM_ENABLE = true;
+              SIM_ENABLE = true;
             } else if (params.equals("DISABLE"))
             {
-              Common::SIM_ENABLE = false;
-              Common::SIM_ACTIVATE = false;
+              SIM_ENABLE = false;
+              SIM_ACTIVATE = false;
             } else if (params.equals("ACTIVATE"))
             {
-              if (Common::SIM_ENABLE) Common::SIM_ACTIVATE = true;
+              if (SIM_ENABLE) SIM_ACTIVATE = true;
             }
           } else if (cmd.equals("SIMP"))
           {
-            Common::SIM_PRESSURE = params.toInt();
+            SIM_PRESSURE = params.toInt();
           }
         }
       }
-      delay(500);
+      threads.delay(250);
     }
   }
 }
