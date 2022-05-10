@@ -9,8 +9,8 @@
 #include <vector>
 
 #define GPS_SERIAL Serial1
-#define GROUND_XBEE_SERIAL Serial7
-#define PAYLOAD_XBEE_SERIAL Serial8
+#define GROUND_XBEE_SERIAL Serial4
+#define PAYLOAD_XBEE_SERIAL Serial5
 
 namespace Common
 {
@@ -49,9 +49,9 @@ namespace Common
 
   struct GPS_Data
   {
-    uint16_t hours;
-    uint16_t minutes;
-    uint16_t seconds;
+    uint8_t hours;
+    uint8_t minutes;
+    uint8_t seconds;
     uint16_t milliseconds;
     float latitude;
     float longitude;

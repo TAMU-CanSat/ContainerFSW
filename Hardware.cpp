@@ -12,7 +12,19 @@
 #include <Servo.h>
 
 namespace Hardware
-{   
+{  
+  bool SIM_ACTIVATE = false;
+  bool SIM_ENABLE = false;
+  int SIM_PRESSURE = 0;
+  float EE_BASE_ALTITUDE = 0;
+  uint16_t EE_PACKET_COUNT = 0;
+  int lastCheck = 4;
+  String lastCMD = "None";
+  elapsedMillis cameraHold = 0;
+  bool cameraRecording = false;
+  bool firstCameraCall = true;
+    
+  
   Adafruit_BMP3XX bmp;
   Adafruit_GPS GPS(&GPS_SERIAL);
   Servo para_servo;
@@ -28,10 +40,8 @@ namespace Hardware
     firstCameraCall = true;
     
     para_servo.attach(Common::PARA_SERVO_PIN);
-    Wire.setSCL(Common::BMP_SCL);
-    Wire.setSDA(Common::BMP_SDA);
-    Wire.begin();
-    bmp.begin_I2C();
+    Wire2.begin();
+    bmp.begin_I2C(0x77, &Wire2);
     GPS.begin(9600);
   }
 
@@ -103,21 +113,30 @@ namespace Hardware
 
   void read_gps(Common::GPS_Data &data)
   {
-    // Loop until we have a full NMEA sentence and it parses successfully
-    do {
+    bool newData = false;
+    for (int i = 0; i < 175; i++)
+    {
       GPS.read();
-      while (!GPS.newNMEAreceived()) {
-        GPS.read();
+      if (GPS.newNMEAreceived())
+      {
+          if (GPS.parse(GPS.lastNMEA()))
+          {
+            newData = true;
+            break;
+          }
       }
-    } while (!GPS.parse(GPS.lastNMEA()));
-
-    setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
+    }
+          
+    if (newData)
+    {
+      setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
+      lastCheck = GPS.milliseconds + millis();
+    }
 
     data.hours = GPS.hour;
     data.minutes = GPS.minute;
-    data.seconds = GPS.seconds + Common::LEAP_SECONDS;
+    data.seconds = GPS.seconds;
     data.milliseconds = GPS.milliseconds;
-    Common::milli = GPS.milliseconds;
     data.latitude = GPS.latitude;
     data.longitude = GPS.longitude;
     data.altitude = GPS.altitude;
@@ -146,9 +165,10 @@ namespace Hardware
 
   void read_sensors(Common::Sensor_Data &data)
   {
-    data.vbat = map(analogRead(Common::VOLTAGE_PIN), 0, 1023, 0, 5.5);
+    data.vbat = ((analogRead(Common::VOLTAGE_PIN) / 1023.0) * 4.2) + 0.35;
+    bmp.performReading();
     data.altitude = bmp.readAltitude(Common::SEA_LEVEL);
-    data.temperature = bmp.readTemperature();
+    data.temperature = bmp.temperature;
   }
 
   void payload_radio_loop()
@@ -159,8 +179,8 @@ namespace Hardware
       while (!payload_packets.isEmpty())
       {
         PAYLOAD_XBEE_SERIAL.println(payload_packets.dequeue());
-        Common::EE_PACKET_COUNT++;
-        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
+        EE_PACKET_COUNT += 1;
+        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -168,15 +188,15 @@ namespace Hardware
       while (read_payload_radio(received))
       {
         String header = String(Common::TEAM_ID + 5000) + ",";
-        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(elapsedMillis()) + ",";
-        header += String(Common::EE_PACKET_COUNT) + ",";
+        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
+        header += String(EE_PACKET_COUNT) + ",";
         header += "T,";
 
         mtx.lock();
         ground_packets.enqueue(header + received);
         mtx.unlock();
       }
-      delay(10);
+      threads.delay(250);
     }
   }
   
@@ -188,8 +208,8 @@ namespace Hardware
       while (!ground_packets.isEmpty())
       {
         GROUND_XBEE_SERIAL.println(ground_packets.dequeue());
-        Common::EE_PACKET_COUNT++;
-        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
+        EE_PACKET_COUNT += 1;
+        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -203,7 +223,7 @@ namespace Hardware
           String cmd = data.substring(0, comma);
           String params = data.substring(data.indexOf(','));
 
-          Common::lastCMD = cmd;
+          lastCMD = cmd;
 
           if (cmd.equals("CX"))
           {
@@ -214,7 +234,10 @@ namespace Hardware
             } else if (params.equals("OFF"))
             {
               States::EE_STATE = 0;
-              EEPROM.put(Common::ST_ADDR, 0);
+              //reset recovery params
+              //EEPROM.put(Common::BA_ADDR, 0.0f);
+              //EEPROM.put(Common::PC_ADDR, 0);
+              //EEPROM.put(Common::ST_ADDR, 0);
             }
           } else if (cmd.equals("ST"))
           {
@@ -223,22 +246,22 @@ namespace Hardware
           {
             if (params.equals("ENABLE"))
             {
-              Common::SIM_ENABLE = true;
+              SIM_ENABLE = true;
             } else if (params.equals("DISABLE"))
             {
-              Common::SIM_ENABLE = false;
-              Common::SIM_ACTIVATE = false;
+              SIM_ENABLE = false;
+              SIM_ACTIVATE = false;
             } else if (params.equals("ACTIVATE"))
             {
-              if (Common::SIM_ENABLE) Common::SIM_ACTIVATE = true;
+              if (SIM_ENABLE) SIM_ACTIVATE = true;
             }
           } else if (cmd.equals("SIMP"))
           {
-            Common::SIM_PRESSURE = params.toInt();
+            SIM_PRESSURE = params.toInt();
           }
         }
       }
-      delay(10);
+      threads.delay(250);
     }
   }
 }
