@@ -29,24 +29,21 @@ namespace States
     // The plan to detect acceleration is to keep a queue of maybe 20 altitude readings,
     // derive it once for velocity, and derive it again for acceleration
     int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
+    float sum = 0;
 
     // We'll check to see if there are enough altitudes stored to calculate acceleration:
     if (altitude_length >= 3)
     {
       for (int i = 0, i < 2, i++)
       {
-        Common::velocities.push_back(Common::altitudes[i + 1] - Common::altitudes[i]);
-        if (i > 0)
-        {
-          Common::acceleration = Common::velocities[i + 1] - Common::velocities[i];
-        }
+        sum = sum + Common::altitudes[i];
       }
-      Common::altitudes.pop_back();
+      Common::altitudes.erase(0);
     }
     Common::altitudes.push_back(gps_data.altitude);
 
     // Now we'll actually switch the state
-    if (Common::acceleration >= 18 || Common::altitudes[altitude_length - 1] >= 10)
+    if ((sum / 3) >= 10)
     {
       States::EE_STATE = 2;
       EEPROM.put(Common::ST_ADDR, 2);
