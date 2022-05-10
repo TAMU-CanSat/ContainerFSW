@@ -44,7 +44,8 @@ namespace Common
   // List to track acceleration measurements:
   std::vector<std::float> altitudes[3];
   std::vector<std::float> velocities[2];
-  float acceleration = 0f;
+  float vertical_velocity = 0;
+  bool drogue_chute_deployed = false;
 
   struct GPS_Data
   {
