@@ -41,7 +41,8 @@ namespace States
 
     if (altitude_length == 2)
     {
-      Common::vertical_velocity = Common::altitudes[1] - Common::altitudes[0] Common::altitudes.pop_back();
+      Common::vertical_velocity = Common::altitudes[1] - Common::altitudes[0];
+      Common::altitudes.pop_back();
     }
 
     // Now we'll actually switch the state
