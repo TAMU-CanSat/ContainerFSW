@@ -8,6 +8,7 @@ namespace States
   {
     // Polling is stopped
     // Poll_Payload.stop()
+    EEPROM.put(Common::ST_ADDR, 0);
 
     // Container stops its telemetry
     // Poll_Sensors.stop()
