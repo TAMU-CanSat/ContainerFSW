@@ -29,7 +29,7 @@ namespace States
     int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
 
     // Record with camera
-    Hardware::update_camera();
+    Hardware::update_camera(true);
 
     // If altitude drops below 400 meters, switch states
     if (altitude_length >= 3)
