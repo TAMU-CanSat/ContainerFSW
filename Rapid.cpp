@@ -7,12 +7,6 @@ namespace States
   void Rapid()
   {
     float sum = 0;
-    // Release drogue chute
-    if (!Common::drogue_chute_deployed)
-    {
-      Hardware::deploy_chute();
-      Common::drogue_chute_deployed = true;
-    }
 
     // Take telemetry
     // Container Telemetry: BMP 308 @ 1Hz, GPS @ 1Hz
@@ -31,11 +25,14 @@ namespace States
     Hardware::payload_packets.enqueue("0");
     Hardware::mtx.unlock();
 
-    // Record with camera
-    Hardware::update_camera()
+    // Now we need to figure out how long our altitude queue is
+    int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
 
-        // If altitude drops below 400 meters, switch states
-        if (altitude_length >= 3)
+    // Record with camera
+    Hardware::update_camera();
+
+    // If altitude drops below 400 meters, switch states
+    if (altitude_length >= 3)
     {
       for (int i = 0, i < 2, i++)
       {
