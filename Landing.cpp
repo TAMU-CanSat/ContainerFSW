@@ -3,9 +3,19 @@
 #include "States.h"
 
 namespace States
-{  
+{
   void Landing()
   {
-    // do landing
+    // Polling is stopped
+    // Poll_Payload.stop()
+
+    // Container stops its telemetry
+    // Poll_Sensors.stop()
+
+    // Sound Beacon
+    Hardware::buzzer_on();
+
+    // Container stops recording
+    Hardware::update_camera(false);
   }
 }
