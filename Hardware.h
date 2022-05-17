@@ -12,14 +12,6 @@
 
 namespace Hardware
 {
-  extern bool SIM_ACTIVATE;
-  extern bool SIM_ENABLE;
-  extern int SIM_PRESSURE;
-  extern float EE_BASE_ALTITUDE;
-  extern uint16_t EE_PACKET_COUNT;
-  extern int lastCheck;
-  extern String lastCMD;
-  
   extern Adafruit_BMP3XX bmp;
   extern Adafruit_GPS GPS;
   extern Servo para_servo;
@@ -28,9 +20,14 @@ namespace Hardware
   extern ArduinoQueue<String> ground_packets;
   extern Threads::Mutex mtx;
 
-  extern elapsedMillis cameraHold;
-  extern bool cameraRecording;
-  extern bool firstCameraCall;
+  // declare altitude and other state variables
+  extern ArduinoQueue<float> altitudes;
+  extern bool chute_deployed;
+  extern bool payload_deployed;
+
+  static elapsedMillis cameraHold;
+  static bool cameraRecording;
+  static bool firstCameraCall;
 
   void init();
 
@@ -54,33 +51,5 @@ namespace Hardware
 
   void payload_radio_loop();
   void ground_radio_loop();
-
-  static int millisecond()
-  {
-    int elapse = millis() - lastCheck;
-    return abs(elapse - ((elapse / 1000) * 1000));
-  }
-
-  static void build_packet(String& packet, const String& state, const String& tp_released, const Common::GPS_Data &gps, const Common::Sensor_Data &sensors)
-  {
-    packet = String(Common::TEAM_ID) + ","; //0
-    packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
-    packet += String(EE_PACKET_COUNT) + ",";
-    if (SIM_ACTIVATE && SIM_ENABLE)
-      packet += "S,";
-    else
-      packet += "F,";
-    packet += tp_released + ",";
-    packet += String(sensors.altitude) + ","; 
-    packet += String(sensors.temperature) + ",";
-    packet += String(sensors.vbat) + ",";
-    packet += String(gps.hours) + ":" + String(gps.minutes) + ":" + String(gps.seconds) + "." + String(gps.milliseconds) + ",";
-    packet += String(gps.latitude) + ","; 
-    packet += String(gps.longitude) + ","; 
-    packet += String(gps.altitude) + ",";  
-    packet += String(gps.sats) + ",";
-    packet += state + ",";
-    packet += lastCMD;
-  }
 }
 #endif
