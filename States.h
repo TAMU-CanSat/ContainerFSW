@@ -4,7 +4,7 @@
 
 namespace States
 {
-  extern uint16_t EE_STATE;
+  static uint16_t EE_STATE = 0;
   
   void Initialization();
   void Standby();
