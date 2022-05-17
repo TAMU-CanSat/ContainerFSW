@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "Hardware.h"
 #include "States.h"
+#include <EEPROM.h>
 
 namespace States
 {
@@ -17,35 +18,36 @@ namespace States
 
     // Build the packet with the data
     String packet;
-    Common::build_packet(packet, "Rapid", "N", mission_start_time, sensor_data);
+    Common::build_packet(packet, "Rapid", "N", gps_data, sensor_data);
 
     // Send the container packet down to the ground station
     Hardware::mtx.lock();
     Hardware::ground_packets.enqueue(packet);
     Hardware::payload_packets.enqueue("0");
     Hardware::mtx.unlock();
-
-    // Now we need to figure out how long our altitude queue is
-    int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
-
-    // Record with camera
-    Hardware::update_camera(true);
-
-    // If altitude drops below 400 meters, switch states
-    if (altitude_length >= 3)
+    
+    int item_count = Hardware::altitudes.itemCount();
+    if (item_count == 3)
     {
-      for (int i = 0, i < 2, i++)
+      // If altitude drops below 400 meters, drop the payload
+      float previous_altitude = Hardware::altitudes.dequeue();
+      float current_altitude = gps_data.altitude;
+      Hardware::altitudes.enqueue(current_altitude);
+  
+      // Record with camera
+      Hardware::update_camera(true);
+  
+      // If altitude drops below 400 meters, switch states
+      if (current_altitude <= 400)
       {
-        sum = sum + Common::altitudes[i];
+        States::EE_STATE = 4;
+        EEPROM.put(Common::ST_ADDR, 4);
       }
-      Common::altitudes.erase(0);
     }
-    Common::altitudes.push_back(gps_data.altitude);
-
-    if ((sum / 3) < 400)
+    else if (item_count < 3)
     {
-      States::EE_STATE = 4;
-      EEPROM.put(Common::ST_ADDR, 4);
+      float current_altitude = gps_data.altitude;
+      Hardware::altitudes.enqueue(current_altitude);
     }
   }
 }
