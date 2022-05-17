@@ -12,19 +12,7 @@
 #include <Servo.h>
 
 namespace Hardware
-{  
-  bool SIM_ACTIVATE = false;
-  bool SIM_ENABLE = false;
-  int SIM_PRESSURE = 0;
-  float EE_BASE_ALTITUDE = 0;
-  uint16_t EE_PACKET_COUNT = 0;
-  int lastCheck = 4;
-  String lastCMD = "None";
-  elapsedMillis cameraHold = 0;
-  bool cameraRecording = false;
-  bool firstCameraCall = true;
-    
-  
+{   
   Adafruit_BMP3XX bmp;
   Adafruit_GPS GPS(&GPS_SERIAL);
   Servo para_servo;
@@ -32,6 +20,11 @@ namespace Hardware
   ArduinoQueue<String> payload_packets(20);
   ArduinoQueue<String> ground_packets(20);
   Threads::Mutex mtx;
+
+  // Add altitude queue
+  ArduinoQueue<float> altitudes(3);
+  bool chute_deployed;
+  bool payload_deployed;
   
   void init()
   {
@@ -40,8 +33,10 @@ namespace Hardware
     firstCameraCall = true;
     
     para_servo.attach(Common::PARA_SERVO_PIN);
-    Wire2.begin();
-    bmp.begin_I2C(0x77, &Wire2);
+    Wire.setSCL(Common::BMP_SCL);
+    Wire.setSDA(Common::BMP_SDA);
+    Wire.begin();
+    bmp.begin_I2C();
     GPS.begin(9600);
   }
 
@@ -113,30 +108,21 @@ namespace Hardware
 
   void read_gps(Common::GPS_Data &data)
   {
-    bool newData = false;
-    for (int i = 0; i < 175; i++)
-    {
+    // Loop until we have a full NMEA sentence and it parses successfully
+    do {
       GPS.read();
-      if (GPS.newNMEAreceived())
-      {
-          if (GPS.parse(GPS.lastNMEA()))
-          {
-            newData = true;
-            break;
-          }
+      while (!GPS.newNMEAreceived()) {
+        GPS.read();
       }
-    }
-          
-    if (newData)
-    {
-      setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
-      lastCheck = GPS.milliseconds + millis();
-    }
+    } while (!GPS.parse(GPS.lastNMEA()));
+
+    setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
 
     data.hours = GPS.hour;
     data.minutes = GPS.minute;
-    data.seconds = GPS.seconds;
+    data.seconds = GPS.seconds + Common::LEAP_SECONDS;
     data.milliseconds = GPS.milliseconds;
+    Common::milli = GPS.milliseconds;
     data.latitude = GPS.latitude;
     data.longitude = GPS.longitude;
     data.altitude = GPS.altitude;
@@ -165,10 +151,9 @@ namespace Hardware
 
   void read_sensors(Common::Sensor_Data &data)
   {
-    data.vbat = ((analogRead(Common::VOLTAGE_PIN) / 1023.0) * 4.2) + 0.35;
-    bmp.performReading();
+    data.vbat = map(analogRead(Common::VOLTAGE_PIN), 0, 1023, 0, 5.5);
     data.altitude = bmp.readAltitude(Common::SEA_LEVEL);
-    data.temperature = bmp.temperature;
+    data.temperature = bmp.readTemperature();
   }
 
   void payload_radio_loop()
@@ -179,8 +164,8 @@ namespace Hardware
       while (!payload_packets.isEmpty())
       {
         PAYLOAD_XBEE_SERIAL.println(payload_packets.dequeue());
-        EE_PACKET_COUNT += 1;
-        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
+        Common::EE_PACKET_COUNT++;
+        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -188,15 +173,15 @@ namespace Hardware
       while (read_payload_radio(received))
       {
         String header = String(Common::TEAM_ID + 5000) + ",";
-        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
-        header += String(EE_PACKET_COUNT) + ",";
+        header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(elapsedMillis()) + ",";
+        header += String(Common::EE_PACKET_COUNT) + ",";
         header += "T,";
 
         mtx.lock();
         ground_packets.enqueue(header + received);
         mtx.unlock();
       }
-      threads.delay(250);
+      delay(10);
     }
   }
   
@@ -208,8 +193,8 @@ namespace Hardware
       while (!ground_packets.isEmpty())
       {
         GROUND_XBEE_SERIAL.println(ground_packets.dequeue());
-        EE_PACKET_COUNT += 1;
-        EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
+        Common::EE_PACKET_COUNT++;
+        EEPROM.put(Common::PC_ADDR, Common::EE_PACKET_COUNT);
       }
       mtx.unlock();
   
@@ -223,7 +208,7 @@ namespace Hardware
           String cmd = data.substring(0, comma);
           String params = data.substring(data.indexOf(','));
 
-          lastCMD = cmd;
+          Common::lastCMD = cmd;
 
           if (cmd.equals("CX"))
           {
@@ -234,10 +219,7 @@ namespace Hardware
             } else if (params.equals("OFF"))
             {
               States::EE_STATE = 0;
-              //reset recovery params
-              //EEPROM.put(Common::BA_ADDR, 0.0f);
-              //EEPROM.put(Common::PC_ADDR, 0);
-              //EEPROM.put(Common::ST_ADDR, 0);
+              EEPROM.put(Common::ST_ADDR, 0);
             }
           } else if (cmd.equals("ST"))
           {
@@ -246,22 +228,22 @@ namespace Hardware
           {
             if (params.equals("ENABLE"))
             {
-              SIM_ENABLE = true;
+              Common::SIM_ENABLE = true;
             } else if (params.equals("DISABLE"))
             {
-              SIM_ENABLE = false;
-              SIM_ACTIVATE = false;
+              Common::SIM_ENABLE = false;
+              Common::SIM_ACTIVATE = false;
             } else if (params.equals("ACTIVATE"))
             {
-              if (SIM_ENABLE) SIM_ACTIVATE = true;
+              if (Common::SIM_ENABLE) Common::SIM_ACTIVATE = true;
             }
           } else if (cmd.equals("SIMP"))
           {
-            SIM_PRESSURE = params.toInt();
+            Common::SIM_PRESSURE = params.toInt();
           }
         }
       }
-      threads.delay(250);
+      delay(10);
     }
   }
 }
