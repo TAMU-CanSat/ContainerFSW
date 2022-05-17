@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "Hardware.h"
 #include "States.h"
+#include <EEPROM.h>
 
 namespace States
 {
@@ -8,7 +9,7 @@ namespace States
   {
     // Polling is stopped
     // Poll_Payload.stop()
-    EEPROM.put(Common::ST_ADDR, 0);
+    EEPROM.put(Common::ST_ADDR, 3);
 
     // Container stops its telemetry
     // Poll_Sensors.stop()
