@@ -1,6 +1,7 @@
 #include "Common.h"
 #include "Hardware.h"
 #include "States.h"
+#include <EEPROM.h>
 
 namespace States
 {
@@ -14,42 +15,35 @@ namespace States
 
     // Build the packet with the data
     String packet;
-    Common::build_packet(packet, "Flight", "N", mission_start_time, sensor_data);
+    Common::build_packet(packet, "Flight", "N", gps_data, sensor_data);
 
     // Send the container packet down to the ground station
     Hardware::mtx.lock();
     Hardware::ground_packets.enqueue(packet);
     Hardware::payload_packets.enqueue("0");
     Hardware::mtx.unlock();
-
-    // Now we're going to monitor the altitude readings and detect when altitude begins to decrease
-    int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
-
-    // We'll check to see if there are enough altitudes stored to calculate velocity
-    // NOTE: time isn't taken into account for the measurement, so technically there are no units
-    // The following was my logic for getting the altitude vector down to a length of two. It looks ugly but I think it works.
-
-    if (altitude_length > 2)
+    
+    // If altitude drops we deploy the chute and change states
+    int item_count = Hardware::altitudes.itemCount();
+    if (item_count == 3)
     {
-      do
+      float current_altitude = gps_data.altitude;
+      float previous_altitude = Hardware::altitudes.dequeue();
+      Hardware::altitudes.enqueue(current_altitude);
+      float current_velocity = current_altitude - previous_altitude;
+
+      // Now we'll actually switch the state
+      if (current_velocity < 0)
       {
-        Common::altitudes.erase(0)
-            altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0])
-      } while (altitude_length > 1)
+        States::EE_STATE = 3;
+        EEPROM.put(Common::ST_ADDR, 3);
+      }
     }
-    Common::altitudes.push_back(gps_data.altitude);
-
-    if (altitude_length == 2)
+    else if (item_count < 3)
     {
-      Common::vertical_velocity = Common::altitudes[1] - Common::altitudes[0];
-      Common::altitudes.pop_back();
+      float current_altitude = gps_data.altitude;
+      Hardware::altitudes.enqueue(current_altitude);
     }
 
-    // Now we'll actually switch the state
-    if (Common::vertical_velocity < 0)
-    {
-      States::EE_STATE = 3;
-      EEPROM.put(Common::ST_ADDR, 3);
-    }
   }
 }
