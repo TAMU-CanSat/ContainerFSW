@@ -1,18 +1,17 @@
 #include "Common.h"
 #include "Hardware.h"
 #include "States.h"
+#include <EEPROM.h>
 
 namespace States
 {
   void Slow()
   {
-    float sum = 0;
-
     // Release drogue chute
-    if (!Common::chute_deployed)
+    if (!Hardware::chute_deployed)
     {
       Hardware::deploy_chute();
-      Common::chute_deployed = true;
+      Hardware::chute_deployed = true;
     }
 
     // Take telemetry
@@ -24,13 +23,13 @@ namespace States
 
     // Build the packet with the data and check if payload is deployed
     String packet;
-    if (Common::payload_deployed)
+    if (Hardware::payload_deployed)
     {
-      Common::build_packet(packet, "Slow", "Y", mission_start_time, sensor_data);
+      Common::build_packet(packet, "Slow", "Y", gps_data, sensor_data);
     }
     else
     {
-      Common::build_packet(packet, "Slow", "N", mission_start_time, sensor_data);
+      Common::build_packet(packet, "Slow", "N", gps_data, sensor_data);
     }
 
     // Send the container packet down to the ground station
@@ -39,40 +38,39 @@ namespace States
     Hardware::payload_packets.enqueue("0");
     Hardware::mtx.unlock();
 
-    // Now we need to figure out how long our altitude queue is
-    int altitude_length = sizeof(Common::altitudes) / sizeof(Common::altitudes[0]);
-
     // Record with camera
     Hardware::update_camera(true);
-
-    // If altitude drops below 400 meters, switch states
-    if (altitude_length >= 3)
+    
+    int item_count = Hardware::altitudes.itemCount();
+    if (item_count == 3)
     {
-      for (int i = 0, i < 2, i++)
+      // If altitude drops below 400 meters, drop the payload
+      float previous_altitude = Hardware::altitudes.dequeue();
+      float current_altitude = gps_data.altitude;
+      Hardware::altitudes.enqueue(current_altitude);
+      
+      if (current_altitude < 300 && !Hardware::payload_deployed)
       {
-        sum = sum + Common::altitudes[i];
+        // Deploy Payload here
+        Hardware::payload_deployed = true;
       }
-      Common::altitudes.erase(0);
+  
+      if (Hardware::payload_deployed)
+      {
+        // Collect payload telemetry here
+      }
+  
+      // Finally, we check to see if the altitude stops changing
+      if ((current_altitude - previous_altitude) >= 0)
+      {
+        States::EE_STATE = 5;
+        EEPROM.put(Common::ST_ADDR, 5);
+      }
     }
-    Common::altitudes.push_back(gps_data.altitude);
-
-    if ((sum / 3) < 300 && !Common::payload_deployed)
+    else if (item_count < 3)
     {
-      // Deploy Payload here
-      Common::payload_deployed = false;
-    }
-
-    if (Common::payload_deployed)
-    {
-      // Collect payload telemetry here
-    }
-
-    // Finally, we check to see if the altitude stops changing
-    if (altitude_length == 3 && (Common::altitudes[2] - Common::altitudes[1]) >= 0)
-    {
-      States::EE_STATE = 5;
-      EEPROM.put(Common::ST_ADDR, 5);
+      float current_altitude = gps_data.altitude;
+      Hardware::altitudes.enqueue(current_altitude);
     }
   }
 }
-
