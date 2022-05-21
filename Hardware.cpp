@@ -10,6 +10,8 @@
 #include <EEPROM.h>
 #include <TimeLib.h>
 #include <Servo.h>
+#include <SD.h>
+#include <SPI.h>
 
 namespace Hardware
 {  
@@ -24,7 +26,6 @@ namespace Hardware
   bool cameraRecording = false;
   bool firstCameraCall = true;
     
-  
   Adafruit_BMP3XX bmp;
   Adafruit_GPS GPS(&GPS_SERIAL);
   Servo para_servo;
@@ -35,14 +36,33 @@ namespace Hardware
   
   void init()
   {
+    pinMode(Common::CAMERA_PIN, OUTPUT);
+    digitalWrite(Common::CAMERA_PIN, HIGH);
     cameraHold = 0;
     cameraRecording = false;
     firstCameraCall = true;
     
     para_servo.attach(Common::PARA_SERVO_PIN);
+    para_servo.write(75);
     Wire2.begin();
     bmp.begin_I2C(0x77, &Wire2);
-    GPS.begin(9600);
+
+    buzzer_on();
+
+    if (SD.begin(chipSelect))
+    {
+      //setup GPS
+      GPS.begin(9600);                   // 9600 is the default baud rate
+      GPS.sendCommand("$PMTK251,38400*27");
+      GPS_SERIAL.end();
+      delay(200);
+      buzzer_off();
+      delay(800);
+      GPS.begin(38400);
+      GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+    }
+
+    //buzzer_off();
   }
 
   void buzzer_on()
@@ -59,7 +79,7 @@ namespace Hardware
 
   void deploy_chute()
   {
-    para_servo.write(30);
+    para_servo.write(0);
   }
 
   void update_camera(bool record)
@@ -89,10 +109,12 @@ namespace Hardware
   {
     if (cameraHold < 150)
     {
-      digitalWrite(Common::CAMERA_PIN, 1);
+      pinMode(Common::CAMERA_PIN, OUTPUT);
+      digitalWrite(Common::CAMERA_PIN, LOW);
     } else
     {
-      digitalWrite(Common::CAMERA_PIN, 0);
+      pinMode(Common::CAMERA_PIN, OUTPUT);
+      digitalWrite(Common::CAMERA_PIN, HIGH);
       cameraRecording = true;
       firstCameraCall = true;
     }
@@ -102,11 +124,13 @@ namespace Hardware
   {
     if (cameraHold < 550)
     {
-      digitalWrite(Common::CAMERA_PIN, 1);
+      pinMode(Common::CAMERA_PIN, OUTPUT);
+      digitalWrite(Common::CAMERA_PIN, LOW);
     } else
     {
-      digitalWrite(Common::CAMERA_PIN, 0);
-      cameraRecording = true;
+      pinMode(Common::CAMERA_PIN, OUTPUT);
+      digitalWrite(Common::CAMERA_PIN, HIGH);
+      cameraRecording = false;
       firstCameraCall = true;
     }
   }
@@ -114,21 +138,16 @@ namespace Hardware
   void read_gps(Common::GPS_Data &data)
   {
     bool newData = false;
-    for (int i = 0; i < 175; i++)
+
+    while (!GPS.newNMEAreceived())
     {
-      GPS.read();
-      if (GPS.newNMEAreceived())
-      {
-          if (GPS.parse(GPS.lastNMEA()))
-          {
-            newData = true;
-            break;
-          }
-      }
+      char c = GPS.read();
     }
-          
+    newData = GPS.parse(GPS.lastNMEA());
+         
     if (newData)
     {
+      //Serial.println(String(GPS.hour) + ":" + String(GPS.minute) + ":" + String(GPS.seconds) + "." + String(GPS.milliseconds));
       setTime(GPS.hour, GPS.minute, GPS.seconds, GPS.day, GPS.month, GPS.year);
       lastCheck = GPS.milliseconds + millis();
     }
@@ -147,7 +166,7 @@ namespace Hardware
   {
     if (GROUND_XBEE_SERIAL.available())
     {
-      data = GROUND_XBEE_SERIAL.readStringUntil('\n');
+      data = GROUND_XBEE_SERIAL.readStringUntil('\r\n');
       return true;
     } else
       return false;
@@ -157,7 +176,7 @@ namespace Hardware
   {
     if (PAYLOAD_XBEE_SERIAL.available())
     {
-      data = PAYLOAD_XBEE_SERIAL.readStringUntil('\n');
+      data = PAYLOAD_XBEE_SERIAL.readStringUntil('&');
       return true;
     } else
       return false;
@@ -172,7 +191,7 @@ namespace Hardware
   }
 
   void payload_radio_loop()
-  {
+  { 
     while(1)
     {
       mtx.lock();
@@ -182,20 +201,19 @@ namespace Hardware
         EE_PACKET_COUNT += 1;
         EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
-      mtx.unlock();
-  
+
       String received;
-      while (read_payload_radio(received))
+      if (read_payload_radio(received))
       {
         String header = String(Common::TEAM_ID + 5000) + ",";
         header += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
         header += String(EE_PACKET_COUNT) + ",";
         header += "T,";
+        header += received + "\r\n";
 
-        mtx.lock();
-        ground_packets.enqueue(header + received);
-        mtx.unlock();
+        ground_packets.enqueue(header);
       }
+      mtx.unlock();
       threads.delay(250);
     }
   }
@@ -203,16 +221,21 @@ namespace Hardware
   void ground_radio_loop()
   {
     while(1)
-    {
+    { 
       mtx.lock();
       while (!ground_packets.isEmpty())
       {
-        GROUND_XBEE_SERIAL.println(ground_packets.dequeue());
+        String packet = ground_packets.dequeue();
+        
+        telemetry = SD.open("container_telemetry.csv", FILE_WRITE);
+        telemetry.print(packet);
+        telemetry.close();
+        
+        GROUND_XBEE_SERIAL.println(packet);
         EE_PACKET_COUNT += 1;
         EEPROM.put(Common::PC_ADDR, EE_PACKET_COUNT);
       }
-      mtx.unlock();
-  
+
       String received;
       if (read_ground_radio(received))
       {
@@ -261,7 +284,8 @@ namespace Hardware
           }
         }
       }
-      threads.delay(250);
+      mtx.unlock();
+      threads.delay(200);
     }
   }
 }

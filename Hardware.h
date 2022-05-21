@@ -9,6 +9,8 @@
 #include <TeensyThreads.h>
 #include <ArduinoQueue.h>
 #include <Servo.h>
+#include <SD.h>
+#include <SPI.h>
 
 namespace Hardware
 {
@@ -31,6 +33,9 @@ namespace Hardware
   extern elapsedMillis cameraHold;
   extern bool cameraRecording;
   extern bool firstCameraCall;
+
+  const int chipSelect = BUILTIN_SDCARD;
+  static File telemetry;
 
   void init();
 
@@ -66,6 +71,7 @@ namespace Hardware
     packet = String(Common::TEAM_ID) + ","; //0
     packet += String(hour()) + ":" + String(minute()) + ":" + String(second()) + "." + String(millisecond()) + ",";
     packet += String(EE_PACKET_COUNT) + ",";
+    packet += "C,";
     if (SIM_ACTIVATE && SIM_ENABLE)
       packet += "S,";
     else
@@ -80,7 +86,7 @@ namespace Hardware
     packet += String(gps.altitude) + ",";  
     packet += String(gps.sats) + ",";
     packet += state + ",";
-    packet += lastCMD;
+    packet += lastCMD + "\r\n";
   }
 }
 #endif

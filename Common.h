@@ -14,10 +14,8 @@
 namespace Common {
   const unsigned long TELEMETRY_DELAY = 1000; //1hz
   const byte VOLTAGE_PIN = 38;
-  const byte BMP_SCL = 24;
-  const byte BMP_SDA = 25;
-  const byte PARA_SERVO_PIN = 41;
-  const byte CAMERA_PIN = 36;
+  const byte PARA_SERVO_PIN = 36;
+  const byte CAMERA_PIN = 35;
   const byte AUDIO_BEACON_PIN = 37;
   const float SEA_LEVEL = 1014.6f; //update this before launch
   const uint16_t TEAM_ID = 1051;

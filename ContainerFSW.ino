@@ -1,13 +1,20 @@
- #include "Common.h"
+#include "Common.h"
 #include "Hardware.h"
 #include "States.h"
 #include <TeensyThreads.h>
 
 #include <EEPROM.h>
 
+unsigned char PAYLOAD_READ_BUFFER[1024];
+unsigned char GROUND_WRITE_BUFFER[1024];
+unsigned char GPS_READ_BUFFER[1024];
+
 void setup() {
   Hardware::init();
-  Serial.begin(115200);
+  ///Serial.begin(115200);
+  GPS_SERIAL.addMemoryForRead(GPS_READ_BUFFER, 1024);
+  PAYLOAD_XBEE_SERIAL.addMemoryForRead(PAYLOAD_READ_BUFFER, 1024);
+  GROUND_XBEE_SERIAL.addMemoryForWrite(GROUND_WRITE_BUFFER, 1024);
   GROUND_XBEE_SERIAL.begin(115200); //xbees must be preconfigured for this
   PAYLOAD_XBEE_SERIAL.begin(115200); //default baud is 9600
 

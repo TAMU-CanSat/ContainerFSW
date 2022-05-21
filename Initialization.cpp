@@ -14,13 +14,16 @@ namespace States
     Hardware::read_gps(gps_data);
     Hardware::read_sensors(sensor_data);
 
-    Hardware::start_recording();
+    /*if (millis() < 5000)
+    {
+        Hardware::update_camera(true);
+    } else if (millis() > 10000)
+    {
+        Hardware::update_camera(false);
+    }*/
 
     String packet;
     Hardware::build_packet(packet, "INITIALIZATION", "N", gps_data, sensor_data); // build new packet
-    Serial.println(packet);
-  
     Hardware::ground_packets.enqueue(packet);
-    //Hardware::payload_packets.enqueue("0");
   }
 }
